@@ -1,0 +1,10 @@
+# Typescript
+src/**/*.js
+src/**/*.d.ts
+
+# Addon
+/build
+
+# Node
+node_modules/
+/*lock*

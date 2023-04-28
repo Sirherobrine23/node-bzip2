@@ -1,0 +1,32 @@
+{
+  "name": "@sirherobrine23/native-bzip2",
+  "version": "0.0.1",
+  "description": "",
+  "type": "commonjs",
+  "main": "src/index.js",
+  "author": "Matheus S Queiroga",
+  "license": "MIT",
+  "homepage": "https://github.com/Sirherobrine23/node-bzip2#readme",
+  "scripts": {
+    "rebuild": "node-gyp rebuild"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Sirherobrine23/node-bzip2.git"
+  },
+  "keywords": [
+    "node-addon"
+  ],
+  "bugs": {
+    "url": "https://github.com/Sirherobrine23/node-bzip2/issues"
+  },
+  "dependencies": {
+    "node-addon-api": "^6.1.0",
+    "node-gyp-build": "^4.6.0"
+  },
+  "devDependencies": {
+    "@types/node": "^18.16.2",
+    "node-gyp": "^9.3.1",
+    "typescript": "^5.0.4"
+  }
+}
