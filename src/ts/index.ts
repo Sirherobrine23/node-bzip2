@@ -7,7 +7,6 @@ export interface Bzip2Options {
 }
 
 export function CompressStream(options?: Bzip2Options): Transform {
-  const str = new Transform();
-  // Call node addon
-  return addon.Compress(options||{}, str);
+  const str = new Transform({autoDestroy: true, emitClose: true, defaultEncoding: "binary", decodeStrings: true, encoding: "binary"});
+  return addon.Compress(str, options);
 }
