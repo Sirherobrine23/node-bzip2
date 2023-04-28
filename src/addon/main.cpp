@@ -1,11 +1,11 @@
 #include <napi.h>
-extern "C" {
-  #include <bzip2/bzlib.h>
-}
-
+#include <compress.cpp>
+#include <decompress.cpp>
 using namespace Napi;
 
 Object Init(Env env, Object exports) {
+  exports.Set("Compress", Function::New(env, Compress));
+  exports.Set("Descompress", Function::New(env, Descompress));
   return exports;
 }
 
