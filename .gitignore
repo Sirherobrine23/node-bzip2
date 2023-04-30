@@ -5,6 +5,8 @@ src/**/*.d.ts
 # Addon
 /build
 
+/*.log
+
 # Node
 node_modules/
 /*lock*

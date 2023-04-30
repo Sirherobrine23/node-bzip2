@@ -5,8 +5,6 @@ extern "C" {
   #include <bzip2/bzlib_private.h>
 }
 
-using namespace std;
-
 // Compress stream in node addon
 Napi::Value Compress(const Napi::CallbackInfo &info) {
   const Napi::Env env = info.Env();
@@ -37,68 +35,95 @@ Napi::Value Compress(const Napi::CallbackInfo &info) {
 
   /* Compression sets */
   int bzCompressStatus;
-  bz_stream bzStream = bz_stream({});
-  bzStream.next_in = NULL;
-  bzStream.avail_in = 0U;
-  bzStream.avail_out = 0U;
-  bzStream.bzalloc = NULL;
-  bzStream.bzfree = NULL;
-  bzStream.opaque = NULL;
-  if ((bzCompressStatus = BZ2_bzCompressInit(&bzStream, level, verbosity, workFactor)) != BZ_OK) {
-    const char* Message = "Error code: " + (char)bzCompressStatus;
-    if (bzCompressStatus == BZ_CONFIG_ERROR) Message = "the library has been mis-compiled";
-    else if (bzCompressStatus == BZ_PARAM_ERROR) Message = "Invalid BZ2_bzCompressInit config";
-    std::cerr << Message << "\n";
-    Napi::Error::New(env, Message).ThrowAsJavaScriptException();
+  bz_stream* bzStream = new bz_stream;
+  bzStream->bzalloc = NULL;
+  bzStream->bzfree = NULL;
+  bzStream->opaque = NULL;
+
+  bzCompressStatus = BZ2_bzCompressInit(bzStream, level, verbosity, workFactor);
+  if (bzCompressStatus != BZ_OK) {
+    if (bzCompressStatus == BZ_CONFIG_ERROR) {
+      Napi::Error::New(env, "the library has been mis-compiled").ThrowAsJavaScriptException();
+    } else if (bzCompressStatus == BZ_PARAM_ERROR) {
+      Napi::Error::New(env, "Invalid BZ2_bzCompress params").ThrowAsJavaScriptException();
+    } else {
+      Napi::Error::New(env, "Compress not reached").ThrowAsJavaScriptException();
+    }
     return env.Undefined();
   }
 
   // Set tranform Buffer
   TransformStream.Set("_transform", Napi::Function::New(env, [&](const Napi::CallbackInfo &info) {
     const Napi::Env env = info.Env();
-    const Napi::Buffer<char> chuck = info[0].As<Napi::Buffer<char>>();
-    ((EState*)bzStream.state)->strm = &bzStream;
-    bzStream.next_in = chuck.Data();
-    bzStream.avail_in = strlen(bzStream.next_in);
-    printf("%d\n", ((EState*)bzStream.state)->mode);
+    const Napi::Object This = info.This().As<Napi::Object>();
+    const Napi::Function Callback = info[2].As<Napi::Function>();
 
-    if ((bzCompressStatus = BZ2_bzCompress(&bzStream, BZ_RUN)) != BZ_OK) {
-      const char* Message = "Error code: " + bzCompressStatus;
-      if (bzCompressStatus == BZ_CONFIG_ERROR) Message = "the library has been mis-compiled";
-      else if (bzCompressStatus == BZ_PARAM_ERROR) Message = "Invalid BZ2_bzCompress config";
-      std::cerr << Message << "\n";
-      Napi::Error::New(env, Message).ThrowAsJavaScriptException();
-      return env.Undefined();
+    // Set Running
+    bzStream->state = new EState;
+    ((EState*)bzStream->state)->state = BZ_S_INPUT;
+    ((EState*)bzStream->state)->mode = BZ_M_RUNNING;
+
+    /// Initial
+    const Napi::Buffer<char*> chuck = info[0].As<Napi::Buffer<char*>>();
+    bzStream->avail_in = chuck.ByteLength();
+    bzStream->next_in = (char*)chuck.Data();
+
+    // Out
+    char* bzBuffer = {0};
+    bzStream->next_out = bzBuffer;
+    bzStream->avail_out = chuck.ByteLength() + 16;
+    ((EState*)bzStream->state)->strm = bzStream;
+
+    bzCompressStatus = BZ2_bzCompress(bzStream, BZ_RUN);
+    if (!(bzCompressStatus == BZ_RUN_OK || bzCompressStatus == BZ_OK)) {
+      std::cout << bzCompressStatus << "\n\n";
+      if (bzCompressStatus == BZ_CONFIG_ERROR) return Callback.Call({Napi::Error::New(env, "the library has been mis-compiled").Value()});
+      else if (bzCompressStatus == BZ_PARAM_ERROR) return Callback.Call({Napi::Error::New(env, "Invalid BZ2_bzCompress params").Value()});
+      else if (bzCompressStatus == BZ_SEQUENCE_ERROR) return Callback.Call({Napi::Error::New(env, "Invalid BZ2_bzCompress sequence").Value()});
+      else return Callback.Call({Napi::Error::New(env, "Compress not reached").Value()});
     }
-    printf("%d\n", ((EState*)bzStream.state)->mode);
 
+    std::cout << "Push\n";
 
     /* push Buffer to stream */
-    const Napi::Object This = info.This().As<Napi::Object>();
     This.Get("push").As<Napi::Function>().Call(This, {
-      Napi::Buffer<char*>::New(env, &bzStream.next_out, sizeof(bzStream.next_out))
+      Napi::Buffer<char>::New(env, bzBuffer, strlen(bzBuffer))
     });
 
     // Call callback to next Buffer
-    return info[2].As<Napi::Function>().Call({});
+    return Callback.Call({});
   }));
 
   // set final stream
   TransformStream.Set("_final", Napi::Function::New(env, [&](const Napi::CallbackInfo &info) {
+    const Napi::Env env = info.Env();
     const Napi::Function Callback = info[0].As<Napi::Function>();
-    printf("%d\n", ((EState*)bzStream.state)->mode);
 
-    bzCompressStatus = BZ2_bzCompressEnd(&bzStream);
-    if (bzCompressStatus != BZ_OK) {
-      const char* Message = "Error code: " + bzCompressStatus;
-      if (bzCompressStatus == BZ_CONFIG_ERROR) Message = "the library has been mis-compiled";
-      else if (bzCompressStatus == BZ_PARAM_ERROR) Message = "Invalid BZ2_bzCompressEnd config";
-      std::cerr << Message << "\n";
-      Napi::Error::New(env, Message).ThrowAsJavaScriptException();
-      return env.Undefined();
+    bzCompressStatus = BZ2_bzCompress(bzStream, BZ_FINISH);
+    if (bzCompressStatus != BZ_FINISH_OK) {
+      if (bzCompressStatus == BZ_CONFIG_ERROR) {
+        return Callback.Call({Napi::Error::New(env, "the library has been mis-compiled").Value()});
+      } else if (bzCompressStatus == BZ_PARAM_ERROR) {
+        return Callback.Call({Napi::Error::New(env, "Invalid BZ2_bzCompress params").Value()});
+      } else if (bzCompressStatus == BZ_SEQUENCE_ERROR) {
+        return Callback.Call({Napi::Error::New(env, "Invalid BZ2_bzCompress sequence").Value()});
+      } else {
+        return Callback.Call({Napi::Error::New(env, "Compress not reached").Value()});
+      }
     }
 
-    std::cerr << ((EState*)bzStream.state)->mode << "\n";
+    bzCompressStatus = BZ2_bzCompressEnd(bzStream);
+    if (bzCompressStatus != BZ_OK) {
+      if (bzCompressStatus == BZ_CONFIG_ERROR) {
+        return Callback.Call({Napi::Error::New(env, "the library has been mis-compiled").Value()});
+      } else if (bzCompressStatus == BZ_PARAM_ERROR) {
+        return Callback.Call({Napi::Error::New(env, "Invalid BZ2_bzCompress params").Value()});
+      } else if (bzCompressStatus == BZ_SEQUENCE_ERROR) {
+        return Callback.Call({Napi::Error::New(env, "Invalid BZ2_bzCompress sequence").Value()});
+      } else {
+        return Callback.Call({Napi::Error::New(env, "Compress not reached").Value()});
+      }
+    }
     return Callback.Call({});
   }));
 

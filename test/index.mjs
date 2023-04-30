@@ -1,5 +1,8 @@
+import { randomBytes, randomInt } from "crypto";
 import { Transform, finished } from "stream";
 import nodeGyp from "node-gyp-build";
+import SegfaultHandler from "segfault-handler";
+SegfaultHandler.registerHandler("crash.log");
 const addon = nodeGyp(process.cwd());
 
 /**
@@ -18,14 +21,16 @@ export function CompressStream(options) {
 
 const str = CompressStream({
   level: 1,
-  verbosity: 0,
-  workFactor: 0
+  verbosity: 1,
+  workFactor: 10
 });
 
+const compressed = [];
 str.on("error", console.error).on("data", buf => {
-  const is = ((buf[0] === 0x5A) && (buf[1] === 0x42) && (buf[3] === 0x68) && (buf[4] === 0x41) && (buf[5] === 0x31) && (buf[6] === 0x26) && (buf[7] === 0x59) && (buf[8] === 0x59) && (buf[9] === 0x53));
-  console.log(is, buf);
+  compressed.push(buf);
 });
 console.log("Writing");
-str.end(Buffer.from([0x12]));
-finished(str, () => console.log("Closes finished"));
+const data = randomBytes(randomInt(1, 256));
+console.log("Initial data size: %f", Buffer.byteLength(data));
+str.end(data);
+finished(str, () => console.log("Closes finished, end with size: %f", Buffer.byteLength(Buffer.concat(compressed))));

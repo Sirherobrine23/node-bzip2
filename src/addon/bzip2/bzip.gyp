@@ -14,23 +14,6 @@
         "decompress.c",
         "bzlib.c",
         "bzip2recover.c"
-      ],
-      "cflags": [
-        "-Wall",
-        "-Winline",
-        "-O2",
-        "-g",
-        "-D_FILE_OFFSET_BITS=64"
-      ],
-      "conditions": [
-        [
-          "OS == 'mac'", {
-            "xcode_settings": {
-              "GCC_ENABLE_CPP_EXCEPTIONS": "YES",
-              "MACOSX_DEPLOYMENT_TARGET": "10.11"
-            }
-          }
-        ]
       ]
     }
   ]
