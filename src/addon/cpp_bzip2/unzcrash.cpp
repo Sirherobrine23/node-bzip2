@@ -1,11 +1,11 @@
 
 /* A test program written to test robustness to decompression of
-   corrupted data.  Usage is 
+   corrupted data.  Usage is
        unzcrash filename
    and the program will read the specified file, compress it (in memory),
    and then repeatedly decompress it, each time with a different bit of
    the compressed data inverted, so as to test all possible one-bit errors.
-   This should not cause any invalid memory accesses.  If it does, 
+   This should not cause any invalid memory accesses.  If it does,
    I want to know about it!
 
    PS.  As you can see from the above description, the process is
@@ -20,7 +20,7 @@
    bzip2/libbzip2 version 1.0.8 of 13 July 2019
    Copyright (C) 1996-2019 Julian Seward <jseward@acm.org>
 
-   Please read the WARNING, DISCLAIMER and PATENTS sections in the 
+   Please read the WARNING, DISCLAIMER and PATENTS sections in the
    README file.
 
    This program is released under the terms of the license contained
@@ -30,16 +30,14 @@
 
 #include <stdio.h>
 #include <assert.h>
-#include "bzlib.h"
+#include "bzlib.hh"
 
 #define M_BLOCK 1000000
 
-typedef unsigned char uchar;
-
 #define M_BLOCK_OUT (M_BLOCK + 1000000)
-uchar inbuf[M_BLOCK];
-uchar outbuf[M_BLOCK_OUT];
-uchar zbuf[M_BLOCK + 600 + (M_BLOCK / 100)];
+char inbuf[M_BLOCK];
+char outbuf[M_BLOCK_OUT];
+char zbuf[M_BLOCK + 600 + (M_BLOCK / 100)];
 
 int nIn, nOut, nZ;
 
@@ -65,7 +63,7 @@ void flip_bit ( int bit )
 {
    int byteno = bit / 8;
    int bitno  = bit % 8;
-   uchar mask = 1 << bitno;
+   char mask = 1 << bitno;
    //fprintf ( stderr, "(byte %d  bit %d  mask %d)",
    //          byteno, bitno, (int)mask );
    zbuf[byteno] ^= mask;
@@ -93,8 +91,7 @@ int main ( int argc, char** argv )
    fprintf ( stderr, "%d bytes read\n", nIn );
 
    nZ = M_BLOCK;
-   r = BZ2_bzBuffToBuffCompress (
-         zbuf, &nZ, inbuf, nIn, 9, 0, 30 );
+   r = BZ2_bzBuffToBuffCompress(zbuf, (unsigned int *)&nZ, inbuf, nIn, 9, 0, 30 );
 
    assert (r == BZ_OK);
    fprintf ( stderr, "%d after compression\n", nZ );
@@ -103,8 +100,7 @@ int main ( int argc, char** argv )
       fprintf ( stderr, "bit %d  ", bit );
       flip_bit ( bit );
       nOut = M_BLOCK_OUT;
-      r = BZ2_bzBuffToBuffDecompress (
-            outbuf, &nOut, zbuf, nZ, 0, 0 );
+      r = BZ2_bzBuffToBuffDecompress (outbuf, (unsigned int *)&nOut, zbuf, nZ, 0, 0);
       fprintf ( stderr, " %d  %s ", r, bzerrorstrings[-r] );
 
       if (r != BZ_OK) {
@@ -115,9 +111,9 @@ int main ( int argc, char** argv )
            return 1;
          } else {
            for (i = 0; i < nOut; i++)
-             if (inbuf[i] != outbuf[i]) { 
-                fprintf(stderr, "mismatch at %d\n", i ); 
-                return 1; 
+             if (inbuf[i] != outbuf[i]) {
+                fprintf(stderr, "mismatch at %d\n", i );
+                return 1;
            }
            if (i == nOut) fprintf(stderr, "really ok!\n" );
          }

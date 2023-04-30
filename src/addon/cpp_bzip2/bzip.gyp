@@ -6,14 +6,13 @@
       "standlone_static_library": 1,
       "defines": [],
       "sources" : [
-        "blocksort.c",
-        "huffman.c",
-        "crctable.c",
-        "randtable.c",
-        "compress.c",
-        "decompress.c",
-        "bzlib.c",
-        "bzip2recover.c"
+        "blocksort.cpp",
+        "huffman.cpp",
+        "crctable.cpp",
+        "randtable.cpp",
+        "compress.cpp",
+        "decompress.cpp",
+        "bzlib.cpp"
       ]
     }
   ]

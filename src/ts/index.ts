@@ -13,6 +13,6 @@ export function CompressStream(options?: Bzip2Options): Transform {
   return addon.Compress(str, {
     level: Math.max(1, Math.min(9, options?.level || 0)),
     verbosity: Math.max(0, Math.min(256, options?.verbosity || 0)),
-    workFactor: Math.max(0, Math.min(256, options?.workFactor || 0)),
+    workFactor: Math.max(0, Math.min(250, options?.workFactor || 0)),
   });
 }

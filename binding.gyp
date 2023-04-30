@@ -3,7 +3,7 @@
     {
       "target_name": "bzip2",
       "dependencies": [
-        "src/addon/bzip2/bzip.gyp:lib"
+        "src/addon/cpp_bzip2/bzip.gyp:lib"
       ],
       "sources": [
         "src/addon/main.cpp"

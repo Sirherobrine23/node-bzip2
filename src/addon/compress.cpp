@@ -1,9 +1,7 @@
 #include <napi.h>
 #include <iostream>
-extern "C" {
-  #include <bzip2/bzlib.h>
-  #include <bzip2/bzlib_private.h>
-}
+#include <cpp_bzip2/bzlib.hh>
+#include <cpp_bzip2/bzlib_private.hh>
 
 // Compress stream in node addon
 Napi::Value Compress(const Napi::CallbackInfo &info) {
@@ -74,7 +72,7 @@ Napi::Value Compress(const Napi::CallbackInfo &info) {
     bzStream->avail_out = chuck.ByteLength() + 16;
     ((EState*)bzStream->state)->strm = bzStream;
 
-    bzCompressStatus = BZ2_bzCompress(bzStream, BZ_RUN);
+    bzCompressStatus = BZ2_bzCompress(bzStream, BZ_Action::Run);
     if (!(bzCompressStatus == BZ_RUN_OK || bzCompressStatus == BZ_OK)) {
       std::cout << bzCompressStatus << "\n\n";
       if (bzCompressStatus == BZ_CONFIG_ERROR) return Callback.Call({Napi::Error::New(env, "the library has been mis-compiled").Value()});
@@ -99,7 +97,7 @@ Napi::Value Compress(const Napi::CallbackInfo &info) {
     const Napi::Env env = info.Env();
     const Napi::Function Callback = info[0].As<Napi::Function>();
 
-    bzCompressStatus = BZ2_bzCompress(bzStream, BZ_FINISH);
+    bzCompressStatus = BZ2_bzCompress(bzStream, BZ_Action::Finish);
     if (bzCompressStatus != BZ_FINISH_OK) {
       if (bzCompressStatus == BZ_CONFIG_ERROR) {
         return Callback.Call({Napi::Error::New(env, "the library has been mis-compiled").Value()});

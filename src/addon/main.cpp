@@ -1,11 +1,8 @@
 #include <napi.h>
 #include <compress.cpp>
-#include <decompress.cpp>
-using namespace Napi;
 
-Object Init(Env env, Object exports) {
-  exports.Set("Compress", Function::New(env, Compress));
-  exports.Set("Descompress", Function::New(env, Descompress));
+Napi::Object Init(Napi::Env env, Napi::Object exports) {
+  exports.Set("Compress", Napi::Function::New(env, Compress));
   return exports;
 }
 
