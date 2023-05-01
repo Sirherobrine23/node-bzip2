@@ -92,8 +92,8 @@ typedef
 
 enum BZ_Action {
    Run = BZ_RUN,
-   Flush = BZ_FLUSH,
    Finish = BZ_FINISH,
+   Flush = BZ_FLUSH,
 };
 
 /*-- Core (low-level) library functions --*/
@@ -107,7 +107,7 @@ BZ_EXTERN int BZ_API(BZ2_bzCompressInit) (
 
 BZ_EXTERN int BZ_API(BZ2_bzCompress) (
       bz_stream* strm,
-      BZ_Action action
+      int action
    );
 
 BZ_EXTERN int BZ_API(BZ2_bzCompressEnd) (
@@ -271,4 +271,5 @@ BZ_EXTERN const char * BZ_API(BZ2_bzerror) (
       int    *errnum
    );
 #endif
+
 #endif

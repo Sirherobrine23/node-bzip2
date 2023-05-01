@@ -1,172 +1,275 @@
+
+/*-------------------------------------------------------------*/
+/*--- Compression machinery (not incl block sorting)        ---*/
+/*---                                            compress.c ---*/
+/*-------------------------------------------------------------*/
+
+/* ------------------------------------------------------------------
+   This file is part of bzip2/libbzip2, a program and library for
+   lossless, block-sorting data compression.
+
+   bzip2/libbzip2 version 1.0.8 of 13 July 2019
+   Copyright (C) 1996-2019 Julian Seward <jseward@acm.org>
+
+   Please read the WARNING, DISCLAIMER and PATENTS sections in the
+   README file.
+
+   This program is released under the terms of the license contained
+   in the file LICENSE.
+   ------------------------------------------------------------------ */
+
+
+/* CHANGES
+    0.9.0    -- original version.
+    0.9.0a/b -- no changes in this file.
+    0.9.0c   -- changed setting of nGroups in sendMTFValues()
+                so as to do a bit better on small files
+*/
+
 #include "bzlib_private.hh"
 
-static __inline__ void bsW(EState* s, Int32 n, UInt32 v) {
-  while (s->bsLive >= 8) {
-    s->zbits[s->numZ] = (UChar)(s->bsBuff >> 24);
-    s->numZ++;
-    s->bsBuff <<= 8;
-    s->bsLive -= 8;
-  }
-  s->bsBuff |= (v << (32 - s->bsLive - n));
-  s->bsLive += n;
+
+/*---------------------------------------------------*/
+/*--- Bit stream I/O                              ---*/
+/*---------------------------------------------------*/
+
+/*---------------------------------------------------*/
+void BZ2_bsInitWrite ( EState* s )
+{
+   s->bsLive = 0;
+   s->bsBuff = 0;
 }
 
-static void bsPutUChar(EState* s, UChar c) {
-  bsW(s, 8, (UInt32)c);
+
+/*---------------------------------------------------*/
+static
+void bsFinishWrite ( EState* s )
+{
+   while (s->bsLive > 0) {
+      s->zbits[s->numZ] = (UChar)(s->bsBuff >> 24);
+      s->numZ++;
+      s->bsBuff <<= 8;
+      s->bsLive -= 8;
+   }
 }
 
-static void bsPutUInt32(EState* s, UInt32 u){
-  bsW(s, 8, (u >> 24) & 0xffL);
-  bsW(s, 8, (u >> 16) & 0xffL);
-  bsW(s, 8, (u >>  8) & 0xffL);
-  bsW(s, 8, u & 0xffL);
+
+/*---------------------------------------------------*/
+#define bsNEEDW(nz)                           \
+{                                             \
+   while (s->bsLive >= 8) {                   \
+      s->zbits[s->numZ]                       \
+         = (UChar)(s->bsBuff >> 24);          \
+      s->numZ++;                              \
+      s->bsBuff <<= 8;                        \
+      s->bsLive -= 8;                         \
+   }                                          \
 }
 
-static void generateMTFValues(EState* s) {
-  UChar   yy[256];
-  Int32   i, j;
-  Int32   zPend;
-  Int32   wr;
-  Int32   EOB;
 
-  /*
-    After sorting (eg, here),
-        s->arr1 [ 0 .. s->nblock-1 ] holds sorted order,
-        and
-        ((UChar*)s->arr2) [ 0 .. s->nblock-1 ]
-        holds the original block data.
-
-    The first thing to do is generate the MTF values,
-    and put them in
-        ((UInt16*)s->arr1) [ 0 .. s->nblock-1 ].
-    Because there are strictly fewer or equal MTF values
-    than block values, ptr values in this area are overwritten
-    with MTF values only when they are no longer needed.
-
-    The final compressed bitstream is generated into the
-    area starting at
-        (UChar*) (&((UChar*)s->arr2)[s->nblock])
-
-    These storage aliases are set up in bzCompressInit(),
-    except for the last one, which is arranged in
-    compressBlock().
-  */
-  UInt32* ptr   = s->ptr;
-  UChar* block  = s->block;
-  UInt16* mtfv  = s->mtfv;
-
-  i = 0;
-  s->nInUse = 0;
-  for (i = 0; i < 256; i++) if (s->inUse[i]) {
-    s->unseqToSeq[i] = s->nInUse;
-    s->nInUse++;
-  }
-
-  EOB = s->nInUse+1;
-  for (i = 0; i <= EOB; i++) s->mtfFreq[i] = 0;
-
-  wr = 0;
-  zPend = 0;
-  for (i = 0; i < s->nInUse; i++) yy[i] = (UChar) i;
-
-  for (i = 0; i < s->nblock; i++) {
-    UChar ll_i;
-    AssertD(wr <= i, "generateMTFValues(1)");
-    j = ptr[i]-1; if (j < 0) j += s->nblock;
-    ll_i = s->unseqToSeq[block[j]];
-    AssertD(ll_i < s->nInUse, "generateMTFValues(2a)");
-
-    if (yy[0] == ll_i) {
-        zPend++;
-    } else {
-
-        if (zPend > 0) {
-          zPend--;
-          while (True) {
-              if (zPend & 1) {
-                mtfv[wr] = BZ_RUNB; wr++;
-                s->mtfFreq[BZ_RUNB]++;
-              } else {
-                mtfv[wr] = BZ_RUNA; wr++;
-                s->mtfFreq[BZ_RUNA]++;
-              }
-              if (zPend < 2) break;
-              zPend = (zPend - 2) / 2;
-          };
-          zPend = 0;
-        }
-        {
-          UChar  rtmp;
-          UChar* ryy_j;
-          UChar  rll_i;
-          rtmp  = yy[1];
-          yy[1] = yy[0];
-          ryy_j = &(yy[1]);
-          rll_i = ll_i;
-          while(rll_i != rtmp) {
-              UChar rtmp2;
-              ryy_j++;
-              rtmp2  = rtmp;
-              rtmp   = *ryy_j;
-              *ryy_j = rtmp2;
-          };
-          yy[0] = rtmp;
-          j = ryy_j - &(yy[0]);
-          mtfv[wr] = j+1; wr++; s->mtfFreq[j+1]++;
-        }
-
-    }
-  }
-
-  if (zPend > 0) {
-    zPend--;
-    while (True) {
-        if (zPend & 1) {
-          mtfv[wr] = BZ_RUNB; wr++;
-          s->mtfFreq[BZ_RUNB]++;
-        } else {
-          mtfv[wr] = BZ_RUNA; wr++;
-          s->mtfFreq[BZ_RUNA]++;
-        }
-        if (zPend < 2) break;
-        zPend = (zPend - 2) / 2;
-    };
-    zPend = 0;
-  }
-
-  mtfv[wr] = EOB; wr++; s->mtfFreq[EOB]++;
-
-  s->nMTF = wr;
+/*---------------------------------------------------*/
+static
+__inline__
+void bsW ( EState* s, Int32 n, UInt32 v )
+{
+   bsNEEDW ( n );
+   s->bsBuff |= (v << (32 - s->bsLive - n));
+   s->bsLive += n;
 }
 
+
+/*---------------------------------------------------*/
+static
+void bsPutUInt32 ( EState* s, UInt32 u )
+{
+   bsW ( s, 8, (u >> 24) & 0xffL );
+   bsW ( s, 8, (u >> 16) & 0xffL );
+   bsW ( s, 8, (u >>  8) & 0xffL );
+   bsW ( s, 8,  u        & 0xffL );
+}
+
+
+/*---------------------------------------------------*/
+static
+void bsPutUChar ( EState* s, UChar c )
+{
+   bsW( s, 8, (UInt32)c );
+}
+
+
+/*---------------------------------------------------*/
+/*--- The back end proper                         ---*/
+/*---------------------------------------------------*/
+
+/*---------------------------------------------------*/
+static
+void makeMaps_e ( EState* s )
+{
+   Int32 i;
+   s->nInUse = 0;
+   for (i = 0; i < 256; i++)
+      if (s->inUse[i]) {
+         s->unseqToSeq[i] = s->nInUse;
+         s->nInUse++;
+      }
+}
+
+
+/*---------------------------------------------------*/
+static
+void generateMTFValues ( EState* s )
+{
+   UChar   yy[256];
+   Int32   i, j;
+   Int32   zPend;
+   Int32   wr;
+   Int32   EOB;
+
+   /*
+      After sorting (eg, here),
+         s->arr1 [ 0 .. s->nblock-1 ] holds sorted order,
+         and
+         ((UChar*)s->arr2) [ 0 .. s->nblock-1 ]
+         holds the original block data.
+
+      The first thing to do is generate the MTF values,
+      and put them in
+         ((UInt16*)s->arr1) [ 0 .. s->nblock-1 ].
+      Because there are strictly fewer or equal MTF values
+      than block values, ptr values in this area are overwritten
+      with MTF values only when they are no longer needed.
+
+      The final compressed bitstream is generated into the
+      area starting at
+         (UChar*) (&((UChar*)s->arr2)[s->nblock])
+
+      These storage aliases are set up in bzCompressInit(),
+      except for the last one, which is arranged in
+      compressBlock().
+   */
+   UInt32* ptr   = s->ptr;
+   UChar* block  = s->block;
+   UInt16* mtfv  = s->mtfv;
+
+   makeMaps_e ( s );
+   EOB = s->nInUse+1;
+
+   for (i = 0; i <= EOB; i++) s->mtfFreq[i] = 0;
+
+   wr = 0;
+   zPend = 0;
+   for (i = 0; i < s->nInUse; i++) yy[i] = (UChar) i;
+
+   for (i = 0; i < s->nblock; i++) {
+      UChar ll_i;
+      AssertD ( wr <= i, "generateMTFValues(1)" );
+      j = ptr[i]-1; if (j < 0) j += s->nblock;
+      ll_i = s->unseqToSeq[block[j]];
+      AssertD ( ll_i < s->nInUse, "generateMTFValues(2a)" );
+
+      if (yy[0] == ll_i) {
+         zPend++;
+      } else {
+
+         if (zPend > 0) {
+            zPend--;
+            while (True) {
+               if (zPend & 1) {
+                  mtfv[wr] = BZ_RUNB; wr++;
+                  s->mtfFreq[BZ_RUNB]++;
+               } else {
+                  mtfv[wr] = BZ_RUNA; wr++;
+                  s->mtfFreq[BZ_RUNA]++;
+               }
+               if (zPend < 2) break;
+               zPend = (zPend - 2) / 2;
+            };
+            zPend = 0;
+         }
+         {
+            UChar  rtmp;
+            UChar* ryy_j;
+            UChar  rll_i;
+            rtmp  = yy[1];
+            yy[1] = yy[0];
+            ryy_j = &(yy[1]);
+            rll_i = ll_i;
+            while ( rll_i != rtmp ) {
+               UChar rtmp2;
+               ryy_j++;
+               rtmp2  = rtmp;
+               rtmp   = *ryy_j;
+               *ryy_j = rtmp2;
+            };
+            yy[0] = rtmp;
+            j = ryy_j - &(yy[0]);
+            mtfv[wr] = j+1; wr++; s->mtfFreq[j+1]++;
+         }
+
+      }
+   }
+
+   if (zPend > 0) {
+      zPend--;
+      while (True) {
+         if (zPend & 1) {
+            mtfv[wr] = BZ_RUNB; wr++;
+            s->mtfFreq[BZ_RUNB]++;
+         } else {
+            mtfv[wr] = BZ_RUNA; wr++;
+            s->mtfFreq[BZ_RUNA]++;
+         }
+         if (zPend < 2) break;
+         zPend = (zPend - 2) / 2;
+      };
+      zPend = 0;
+   }
+
+   mtfv[wr] = EOB; wr++; s->mtfFreq[EOB]++;
+
+   s->nMTF = wr;
+}
+
+
+/*---------------------------------------------------*/
 #define BZ_LESSER_ICOST  0
 #define BZ_GREATER_ICOST 15
 
-static void sendMTFValues(EState* s) {
-  Int32 v, t, i, j, gs, ge, totc, bt, bc, iter;
-  Int32 nSelectors, alphaSize, minLen, maxLen, selCtr;
-  Int32 nGroups, nBytes;
+static
+void sendMTFValues ( EState* s )
+{
+   Int32 v, t, i, j, gs, ge, totc, bt, bc, iter;
+   Int32 nSelectors, alphaSize, minLen, maxLen, selCtr;
+   Int32 nGroups, nBytes;
 
-  /*--
-  UChar  len [BZ_N_GROUPS][BZ_MAX_ALPHA_SIZE];
-  is a global since the decoder also needs it.
+   /*--
+   UChar  len [BZ_N_GROUPS][BZ_MAX_ALPHA_SIZE];
+   is a global since the decoder also needs it.
 
-  Int32  code[BZ_N_GROUPS][BZ_MAX_ALPHA_SIZE];
-  Int32  rfreq[BZ_N_GROUPS][BZ_MAX_ALPHA_SIZE];
-  are also globals only used in this proc.
-  Made global to keep stack frame size small.
-  --*/
+   Int32  code[BZ_N_GROUPS][BZ_MAX_ALPHA_SIZE];
+   Int32  rfreq[BZ_N_GROUPS][BZ_MAX_ALPHA_SIZE];
+   are also globals only used in this proc.
+   Made global to keep stack frame size small.
+   --*/
 
 
-  UInt16 cost[BZ_N_GROUPS];
-  Int32  fave[BZ_N_GROUPS];
-  UInt16* mtfv = s->mtfv;
-  if (s->verbosity >= 3) VPrintf3("      %d in block, %d after MTF & 1-2 coding, ""%d+2 syms in use\n", s->nblock, s->nMTF, s->nInUse);
-  alphaSize = s->nInUse+2;
-  for (t = 0; t < BZ_N_GROUPS; t++) for (v = 0; v < alphaSize; v++) s->len[t][v] = BZ_GREATER_ICOST;
+   UInt16 cost[BZ_N_GROUPS];
+   Int32  fave[BZ_N_GROUPS];
+
+   UInt16* mtfv = s->mtfv;
+
+   if (s->verbosity >= 3)
+      VPrintf3( "      %d in block, %d after MTF & 1-2 coding, "
+                "%d+2 syms in use\n",
+                s->nblock, s->nMTF, s->nInUse );
+
+   alphaSize = s->nInUse+2;
+   for (t = 0; t < BZ_N_GROUPS; t++)
+      for (v = 0; v < alphaSize; v++)
+         s->len[t][v] = BZ_GREATER_ICOST;
 
    /*--- Decide how many coding tables to use ---*/
-   AssertH(s->nMTF > 0, 3001);
+   AssertH ( s->nMTF > 0, 3001 );
    if (s->nMTF < 200)  nGroups = 2; else
    if (s->nMTF < 600)  nGroups = 3; else
    if (s->nMTF < 1200) nGroups = 4; else
@@ -200,7 +303,7 @@ static void sendMTFValues(EState* s) {
             VPrintf5( "      initial group %d, [%d .. %d], "
                       "has %d syms (%4.1f%%)\n",
                       nPart, gs, ge, aFreq,
-                      (100.0 * (float)aFreq) / (float)(s->nMTF));
+                      (100.0 * (float)aFreq) / (float)(s->nMTF) );
 
          for (v = 0; v < alphaSize; v++)
             if (v >= gs && v <= ge)
@@ -331,11 +434,11 @@ static void sendMTFValues(EState* s) {
          gs = ge+1;
       }
       if (s->verbosity >= 3) {
-         VPrintf2("      pass %d: size is %d, grp uses are ",
-                   iter+1, totc/8);
+         VPrintf2 ( "      pass %d: size is %d, grp uses are ",
+                   iter+1, totc/8 );
          for (t = 0; t < nGroups; t++)
-            VPrintf1("%d ", fave[t]);
-         VPrintf0("\n");
+            VPrintf1 ( "%d ", fave[t] );
+         VPrintf0 ( "\n" );
       }
 
       /*--
@@ -344,15 +447,15 @@ static void sendMTFValues(EState* s) {
       /* maxLen was changed from 20 to 17 in bzip2-1.0.3.  See
          comment in huffman.c for details. */
       for (t = 0; t < nGroups; t++)
-         BZ2_hbMakeCodeLengths(&(s->len[t][0]), &(s->rfreq[t][0]),
-                                 alphaSize, 17 /*20*/);
+         BZ2_hbMakeCodeLengths ( &(s->len[t][0]), &(s->rfreq[t][0]),
+                                 alphaSize, 17 /*20*/ );
    }
 
 
-   AssertH( nGroups < 8, 3002);
+   AssertH( nGroups < 8, 3002 );
    AssertH( nSelectors < 32768 &&
             nSelectors <= BZ_MAX_SELECTORS,
-            3003);
+            3003 );
 
 
    /*--- Compute MTF values for the selectors. ---*/
@@ -363,7 +466,7 @@ static void sendMTFValues(EState* s) {
          ll_i = s->selector[i];
          j = 0;
          tmp = pos[j];
-         while(ll_i != tmp) {
+         while ( ll_i != tmp ) {
             j++;
             tmp2 = tmp;
             tmp = pos[j];
@@ -382,10 +485,10 @@ static void sendMTFValues(EState* s) {
          if (s->len[t][i] > maxLen) maxLen = s->len[t][i];
          if (s->len[t][i] < minLen) minLen = s->len[t][i];
       }
-      AssertH(!(maxLen > 17 /*20*/), 3004);
-      AssertH(!(minLen < 1),  3005);
-      BZ2_hbAssignCodes(&(s->code[t][0]), &(s->len[t][0]),
-                          minLen, maxLen, alphaSize);
+      AssertH ( !(maxLen > 17 /*20*/ ), 3004 );
+      AssertH ( !(minLen < 1),  3005 );
+      BZ2_hbAssignCodes ( &(s->code[t][0]), &(s->len[t][0]),
+                          minLen, maxLen, alphaSize );
    }
 
    /*--- Transmit the mapping table. ---*/
@@ -408,35 +511,35 @@ static void sendMTFValues(EState* s) {
             }
 
       if (s->verbosity >= 3)
-         VPrintf1( "      bytes: mapping %d, ", s->numZ-nBytes);
+         VPrintf1( "      bytes: mapping %d, ", s->numZ-nBytes );
    }
 
    /*--- Now the selectors. ---*/
    nBytes = s->numZ;
-   bsW(s, 3, nGroups);
-   bsW(s, 15, nSelectors);
+   bsW ( s, 3, nGroups );
+   bsW ( s, 15, nSelectors );
    for (i = 0; i < nSelectors; i++) {
       for (j = 0; j < s->selectorMtf[i]; j++) bsW(s,1,1);
       bsW(s,1,0);
    }
    if (s->verbosity >= 3)
-      VPrintf1( "selectors %d, ", s->numZ-nBytes);
+      VPrintf1( "selectors %d, ", s->numZ-nBytes );
 
    /*--- Now the coding tables. ---*/
    nBytes = s->numZ;
 
    for (t = 0; t < nGroups; t++) {
       Int32 curr = s->len[t][0];
-      bsW(s, 5, curr);
+      bsW ( s, 5, curr );
       for (i = 0; i < alphaSize; i++) {
          while (curr < s->len[t][i]) { bsW(s,2,2); curr++; /* 10 */ };
          while (curr > s->len[t][i]) { bsW(s,2,3); curr--; /* 11 */ };
-         bsW(s, 1, 0);
+         bsW ( s, 1, 0 );
       }
    }
 
    if (s->verbosity >= 3)
-      VPrintf1("code lengths %d, ", s->numZ-nBytes);
+      VPrintf1 ( "code lengths %d, ", s->numZ-nBytes );
 
    /*--- And finally, the block data proper ---*/
    nBytes = s->numZ;
@@ -446,7 +549,7 @@ static void sendMTFValues(EState* s) {
       if (gs >= s->nMTF) break;
       ge = gs + BZ_G_SIZE - 1;
       if (ge >= s->nMTF) ge = s->nMTF-1;
-      AssertH(s->selector[selCtr] < nGroups, 3006);
+      AssertH ( s->selector[selCtr] < nGroups, 3006 );
 
       if (nGroups == 6 && 50 == ge-gs+1) {
             /*--- fast track the common case ---*/
@@ -458,9 +561,9 @@ static void sendMTFValues(EState* s) {
 
 #           define BZ_ITAH(nn)                      \
                mtfv_i = mtfv[gs+(nn)];              \
-               bsW(s,                             \
+               bsW ( s,                             \
                      s_len_sel_selCtr[mtfv_i],      \
-                     s_code_sel_selCtr[mtfv_i])
+                     s_code_sel_selCtr[mtfv_i] )
 
             BZ_ITAH(0);  BZ_ITAH(1);  BZ_ITAH(2);  BZ_ITAH(3);  BZ_ITAH(4);
             BZ_ITAH(5);  BZ_ITAH(6);  BZ_ITAH(7);  BZ_ITAH(8);  BZ_ITAH(9);
@@ -478,9 +581,9 @@ static void sendMTFValues(EState* s) {
       } else {
 	 /*--- slow version which correctly handles all situations ---*/
          for (i = gs; i <= ge; i++) {
-            bsW(s,
+            bsW ( s,
                   s->len  [s->selector[selCtr]] [mtfv[i]],
-                  s->code [s->selector[selCtr]] [mtfv[i]]);
+                  s->code [s->selector[selCtr]] [mtfv[i]] );
          }
       }
 
@@ -488,71 +591,82 @@ static void sendMTFValues(EState* s) {
       gs = ge+1;
       selCtr++;
    }
-   AssertH( selCtr == nSelectors, 3007);
+   AssertH( selCtr == nSelectors, 3007 );
 
    if (s->verbosity >= 3)
-      VPrintf1( "codes %d\n", s->numZ-nBytes);
+      VPrintf1( "codes %d\n", s->numZ-nBytes );
 }
 
-static void bsFinishWrite(EState* s) {
-  while (s->bsLive > 0) {
-    s->zbits[s->numZ] = (UChar)(s->bsBuff >> 24);
-    s->numZ++;
-    s->bsBuff <<= 8;
-    s->bsLive -= 8;
-  }
+
+/*---------------------------------------------------*/
+void BZ2_compressBlock ( EState* s, Bool is_last_block )
+{
+   if (s->nblock > 0) {
+
+      BZ_FINALISE_CRC ( s->blockCRC );
+      s->combinedCRC = (s->combinedCRC << 1) | (s->combinedCRC >> 31);
+      s->combinedCRC ^= s->blockCRC;
+      if (s->blockNo > 1) s->numZ = 0;
+
+      if (s->verbosity >= 2)
+         VPrintf4( "    block %d: crc = 0x%08x, "
+                   "combined CRC = 0x%08x, size = %d\n",
+                   s->blockNo, s->blockCRC, s->combinedCRC, s->nblock );
+
+      BZ2_blockSort ( s );
+   }
+
+   s->zbits = (UChar*) (&((UChar*)s->arr2)[s->nblock]);
+
+   /*-- If this is the first block, create the stream header. --*/
+   if (s->blockNo == 1) {
+      BZ2_bsInitWrite ( s );
+      bsPutUChar ( s, BZ_HDR_B );
+      bsPutUChar ( s, BZ_HDR_Z );
+      bsPutUChar ( s, BZ_HDR_h );
+      bsPutUChar ( s, (UChar)(BZ_HDR_0 + s->blockSize100k) );
+   }
+
+   if (s->nblock > 0) {
+
+      bsPutUChar ( s, 0x31 ); bsPutUChar ( s, 0x41 );
+      bsPutUChar ( s, 0x59 ); bsPutUChar ( s, 0x26 );
+      bsPutUChar ( s, 0x53 ); bsPutUChar ( s, 0x59 );
+
+      /*-- Now the block's CRC, so it is in a known place. --*/
+      bsPutUInt32 ( s, s->blockCRC );
+
+      /*--
+         Now a single bit indicating (non-)randomisation.
+         As of version 0.9.5, we use a better sorting algorithm
+         which makes randomisation unnecessary.  So always set
+         the randomised bit to 'no'.  Of course, the decoder
+         still needs to be able to handle randomised blocks
+         so as to maintain backwards compatibility with
+         older versions of bzip2.
+      --*/
+      bsW(s,1,0);
+
+      bsW ( s, 24, s->origPtr );
+      generateMTFValues ( s );
+      sendMTFValues ( s );
+   }
+
+
+   /*-- If this is the last block, add the stream trailer. --*/
+   if (is_last_block) {
+
+      bsPutUChar ( s, 0x17 ); bsPutUChar ( s, 0x72 );
+      bsPutUChar ( s, 0x45 ); bsPutUChar ( s, 0x38 );
+      bsPutUChar ( s, 0x50 ); bsPutUChar ( s, 0x90 );
+      bsPutUInt32 ( s, s->combinedCRC );
+      if (s->verbosity >= 2)
+         VPrintf1( "    final combined CRC = 0x%08x\n   ", s->combinedCRC );
+      bsFinishWrite ( s );
+   }
 }
 
-void BZ2_compressBlock(EState* s, Bool is_last_block) {
-  if (s->nblock > 0) {
-    BZ_FINALISE_CRC(s->blockCRC);
-    s->combinedCRC = (s->combinedCRC << 1) | (s->combinedCRC >> 31);
-    s->combinedCRC ^= s->blockCRC;
-    if (s->blockNo > 1) s->numZ = 0;
-    if (s->verbosity >= 2) VPrintf4("    block %d: crc = 0x%08x, ""combined CRC = 0x%08x, size = %d\n", s->blockNo, s->blockCRC, s->combinedCRC, s->nblock);
-    BZ2_blockSort(s);
-  }
-  s->zbits = (UChar*) (&((UChar*)s->arr2)[s->nblock]);
-  /*-- If this is the first block, create the stream header. --*/
-  if (s->blockNo == 1) {
-    BZ2_bsInitWrite(s);
-    bsPutUChar(s, BZ_HDR_B);
-    bsPutUChar(s, BZ_HDR_Z);
-    bsPutUChar(s, BZ_HDR_h);
-    bsPutUChar(s, (UChar)(BZ_HDR_0 + s->blockSize100k));
-  }
 
-  if (s->nblock > 0) {
-    bsPutUChar(s, 0x31); bsPutUChar(s, 0x41);
-    bsPutUChar(s, 0x59); bsPutUChar(s, 0x26);
-    bsPutUChar(s, 0x53); bsPutUChar(s, 0x59);
-
-    /*-- Now the block's CRC, so it is in a known place. --*/
-    bsPutUInt32(s, s->blockCRC);
-
-    /*--
-        Now a single bit indicating (non-)randomisation.
-        As of version 0.9.5, we use a better sorting algorithm
-        which makes randomisation unnecessary.  So always set
-        the randomised bit to 'no'.  Of course, the decoder
-        still needs to be able to handle randomised blocks
-        so as to maintain backwards compatibility with
-        older versions of bzip2.
-    --*/
-    bsW(s,1,0);
-
-    bsW(s, 24, s->origPtr);
-    generateMTFValues(s);
-    sendMTFValues(s);
-  }
-
-  /*-- If this is the last block, add the stream trailer. --*/
-  if (is_last_block) {
-    bsPutUChar(s, 0x17); bsPutUChar(s, 0x72);
-    bsPutUChar(s, 0x45); bsPutUChar(s, 0x38);
-    bsPutUChar(s, 0x50); bsPutUChar(s, 0x90);
-    bsPutUInt32(s, s->combinedCRC);
-    if (s->verbosity >= 2) VPrintf1("    final combined CRC = 0x%08x\n   ", s->combinedCRC);
-    bsFinishWrite(s);
-  }
-}
+/*-------------------------------------------------------------*/
+/*--- end                                        compress.c ---*/
+/*-------------------------------------------------------------*/

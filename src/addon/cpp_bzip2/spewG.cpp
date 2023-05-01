@@ -4,7 +4,7 @@
    support for large files (> 2GB) in a reasonable amount of time.
    I suggest you use the undocumented --exponential option to
    bzip2 when compressing the resulting file; this saves a bit of
-   time.  Note: *don't* bother with --exponential when compressing 
+   time.  Note: *don't* bother with --exponential when compressing
    Real Files; it'll just waste a lot of CPU time :-)
    (but is otherwise harmless).
 */
@@ -16,7 +16,7 @@
    bzip2/libbzip2 version 1.0.8 of 13 July 2019
    Copyright (C) 1996-2019 Julian Seward <jseward@acm.org>
 
-   Please read the WARNING, DISCLAIMER and PATENTS sections in the 
+   Please read the WARNING, DISCLAIMER and PATENTS sections in the
    README file.
 
    This program is released under the terms of the license contained
@@ -38,10 +38,10 @@ char buf[N_BUF];
 int main ( int argc, char** argv )
 {
    int ii, kk, p;
-   srandom(1);
-   setbuffer ( stdout, buf, N_BUF );
+   srand(1);
+   setbuf( stdout, buf);
    for (kk = 0; kk < MEGABYTES * 515; kk+=3) {
-      p = 25+random()%50;
+      p = 25+rand()%50;
       for (ii = 0; ii < p; ii++)
          printf ( "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" );
       for (ii = 0; ii < p-1; ii++)

@@ -1,12 +1,39 @@
+
+/*-------------------------------------------------------------*/
+/*--- Private header file for the library.                  ---*/
+/*---                                       bzlib_private.h ---*/
+/*-------------------------------------------------------------*/
+
+/* ------------------------------------------------------------------
+   This file is part of bzip2/libbzip2, a program and library for
+   lossless, block-sorting data compression.
+
+   bzip2/libbzip2 version 1.0.8 of 13 July 2019
+   Copyright (C) 1996-2019 Julian Seward <jseward@acm.org>
+
+   Please read the WARNING, DISCLAIMER and PATENTS sections in the
+   README file.
+
+   This program is released under the terms of the license contained
+   in the file LICENSE.
+   ------------------------------------------------------------------ */
+
+
 #ifndef _BZLIB_PRIVATE_HH
 #define _BZLIB_PRIVATE_HH
+
 #include <stdlib.h>
+
 #ifndef BZ_NO_STDIO
 #include <stdio.h>
 #include <ctype.h>
 #include <string.h>
 #endif
+
 #include "bzlib.hh"
+
+
+
 /*-- General stuff. --*/
 
 #define BZ_VERSION  "1.0.8, 13-Jul-2019"
@@ -475,3 +502,8 @@ BZ2_hbCreateDecodeTables ( Int32*, Int32*, Int32*, UChar*,
 #define NULL 0
 #endif
 #endif
+
+
+/*-------------------------------------------------------------*/
+/*--- end                                   bzlib_private.h ---*/
+/*-------------------------------------------------------------*/
