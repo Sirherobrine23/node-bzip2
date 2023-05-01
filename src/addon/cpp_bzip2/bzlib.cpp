@@ -145,22 +145,11 @@ Bool isempty_RL ( EState* s )
 
 
 /*---------------------------------------------------*/
-int BZ_API(BZ2_bzCompressInit)
-                    ( bz_stream* strm,
-                     int        blockSize100k,
-                     int        verbosity,
-                     int        workFactor )
-{
+int BZ_API(BZ2_bzCompressInit)(bz_stream* strm, int blockSize100k, int verbosity, int workFactor) {
    Int32   n;
    EState* s;
-
    if (!bz_config_ok()) return BZ_CONFIG_ERROR;
-
-   if (strm == NULL ||
-       blockSize100k < 1 || blockSize100k > 9 ||
-       workFactor < 0 || workFactor > 250)
-     return BZ_PARAM_ERROR;
-
+   if (strm == NULL || blockSize100k < 1 || blockSize100k > 9 || workFactor < 0 || workFactor > 250) return BZ_PARAM_ERROR;
    if (workFactor == 0) workFactor = 30;
    if (strm->bzalloc == NULL) strm->bzalloc = default_bzalloc;
    if (strm->bzfree == NULL) strm->bzfree = default_bzfree;
@@ -415,7 +404,6 @@ int BZ_API(BZ2_bzCompress) ( bz_stream *strm, int action )
 
    preswitch:
    switch (s->mode) {
-
       case BZ_M_IDLE:
          return BZ_SEQUENCE_ERROR;
 
@@ -423,40 +411,30 @@ int BZ_API(BZ2_bzCompress) ( bz_stream *strm, int action )
          if (action == BZ_RUN) {
             progress = handle_compress ( strm );
             return progress ? BZ_RUN_OK : BZ_PARAM_ERROR;
-         }
-         else
-	 if (action == BZ_FLUSH) {
+         } else if (action == BZ_FLUSH) {
             s->avail_in_expect = strm->avail_in;
             s->mode = BZ_M_FLUSHING;
             goto preswitch;
-         }
-         else
-         if (action == BZ_FINISH) {
+         } else if (action == BZ_FINISH) {
             s->avail_in_expect = strm->avail_in;
             s->mode = BZ_M_FINISHING;
             goto preswitch;
-         }
-         else
-            return BZ_PARAM_ERROR;
+         } else return BZ_PARAM_ERROR;
 
       case BZ_M_FLUSHING:
          if (action != BZ_FLUSH) return BZ_SEQUENCE_ERROR;
-         if (s->avail_in_expect != s->strm->avail_in)
-            return BZ_SEQUENCE_ERROR;
+         if (s->avail_in_expect != s->strm->avail_in) return BZ_SEQUENCE_ERROR;
          progress = handle_compress ( strm );
-         if (s->avail_in_expect > 0 || !isempty_RL(s) ||
-             s->state_out_pos < s->numZ) return BZ_FLUSH_OK;
+         if (s->avail_in_expect > 0 || !isempty_RL(s) || s->state_out_pos < s->numZ) return BZ_FLUSH_OK;
          s->mode = BZ_M_RUNNING;
          return BZ_RUN_OK;
 
       case BZ_M_FINISHING:
          if (action != BZ_FINISH) return BZ_SEQUENCE_ERROR;
-         if (s->avail_in_expect != s->strm->avail_in)
-            return BZ_SEQUENCE_ERROR;
+         if (s->avail_in_expect != s->strm->avail_in) return BZ_SEQUENCE_ERROR;
          progress = handle_compress ( strm );
          if (!progress) return BZ_SEQUENCE_ERROR;
-         if (s->avail_in_expect > 0 || !isempty_RL(s) ||
-             s->state_out_pos < s->numZ) return BZ_FINISH_OK;
+         if (s->avail_in_expect > 0 || !isempty_RL(s) || s->state_out_pos < s->numZ) return BZ_FINISH_OK;
          s->mode = BZ_M_IDLE;
          return BZ_STREAM_END;
    }
