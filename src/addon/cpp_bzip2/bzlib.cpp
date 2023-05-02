@@ -8,8 +8,8 @@
    This file is part of bzip2/libbzip2, a program and library for
    lossless, block-sorting data compression.
 
-   bzip2/libbzip2 version 1.0.8 of 13 July 2019
-   Copyright (C) 1996-2019 Julian Seward <jseward@acm.org>
+   bzip2/libbzip2 version 1.1.0 of 6 September 2010
+   Copyright (C) 1996-2010 Julian Seward <jseward@acm.org>
 
    Please read the WARNING, DISCLAIMER and PATENTS sections in the
    README file.
@@ -30,6 +30,7 @@
 
 #include "bzlib_private.hh"
 
+#define BZ_VERSION "0.0.0"
 
 /*---------------------------------------------------*/
 /*--- Compression stuff                           ---*/
@@ -43,10 +44,11 @@ void BZ2_bz__AssertH__fail ( int errcode )
    fprintf(stderr,
       "\n\nbzip2/libbzip2: internal error number %d.\n"
       "This is a bug in bzip2/libbzip2, %s.\n"
-      "Please report it to: bzip2-devel@sourceware.org.  If this happened\n"
-      "when you were using some program which uses libbzip2 as a\n"
-      "component, you should also report this bug to the author(s)\n"
-      "of that program.  Please make an effort to report this bug;\n"
+      "Please report it at: https://gitlab.com/bzip2/bzip2/-/issues\n"
+      "If this happened when you were using some program which uses\n"
+      "libbzip2 as a component, you should also report this bug to\n"
+      "the author(s) of that program.\n"
+      "Please make an effort to report this bug;\n"
       "timely and accurate bug reports eventually lead to higher\n"
       "quality software.  Thanks.\n\n",
       errcode,
@@ -145,17 +147,21 @@ Bool isempty_RL ( EState* s )
 
 
 /*---------------------------------------------------*/
-int BZ_API(BZ2_bzCompressInit)(bz_stream* strm, int blockSize100k, int verbosity, int workFactor) {
+int BZ_API(BZ2_bzCompressInit)(bz_stream* strm, int blockSize100k, int verbosity, int workFactor)
+{
    Int32   n;
    EState* s;
+
    if (!bz_config_ok()) return BZ_CONFIG_ERROR;
+
    if (strm == NULL || blockSize100k < 1 || blockSize100k > 9 || workFactor < 0 || workFactor > 250) return BZ_PARAM_ERROR;
+
    if (workFactor == 0) workFactor = 30;
-   if (strm->bzalloc == NULL) strm->bzalloc = default_bzalloc;
-   if (strm->bzfree == NULL) strm->bzfree = default_bzfree;
+   if (strm->bzalloc == NULL || strm->bzalloc == nullptr) strm->bzalloc = default_bzalloc;
+   if (strm->bzfree == NULL || strm->bzfree == nullptr) strm->bzfree = default_bzfree;
 
    s = (EState*)BZALLOC( sizeof(EState) );
-   if (s == NULL) return BZ_MEM_ERROR;
+   if (s == NULL || s == nullptr) return BZ_MEM_ERROR;
    s->strm = strm;
 
    s->arr1 = NULL;
@@ -351,7 +357,7 @@ Bool handle_compress ( bz_stream* strm )
 {
    Bool progress_in  = False;
    Bool progress_out = False;
-   EState* s = (EState*)strm->state;
+   EState* s = (EState *)strm->state;
 
    while (True) {
 
@@ -397,16 +403,15 @@ int BZ_API(BZ2_bzCompress) ( bz_stream *strm, int action )
 {
    Bool progress;
    EState* s;
-   if (strm == NULL) return BZ_PARAM_ERROR;
-   s = (EState*)strm->state;
-   if (s == NULL) return BZ_PARAM_ERROR;
+   if (strm == NULL || strm == nullptr) return BZ_PARAM_ERROR;
+   s = (EState *)&strm->state;
+   if (s == NULL || s == nullptr) return BZ_PARAM_ERROR;
    if (s->strm != strm) return BZ_PARAM_ERROR;
 
    preswitch:
    switch (s->mode) {
       case BZ_M_IDLE:
          return BZ_SEQUENCE_ERROR;
-
       case BZ_M_RUNNING:
          if (action == BZ_RUN) {
             progress = handle_compress ( strm );
@@ -420,7 +425,6 @@ int BZ_API(BZ2_bzCompress) ( bz_stream *strm, int action )
             s->mode = BZ_M_FINISHING;
             goto preswitch;
          } else return BZ_PARAM_ERROR;
-
       case BZ_M_FLUSHING:
          if (action != BZ_FLUSH) return BZ_SEQUENCE_ERROR;
          if (s->avail_in_expect != s->strm->avail_in) return BZ_SEQUENCE_ERROR;
@@ -428,7 +432,6 @@ int BZ_API(BZ2_bzCompress) ( bz_stream *strm, int action )
          if (s->avail_in_expect > 0 || !isempty_RL(s) || s->state_out_pos < s->numZ) return BZ_FLUSH_OK;
          s->mode = BZ_M_RUNNING;
          return BZ_RUN_OK;
-
       case BZ_M_FINISHING:
          if (action != BZ_FINISH) return BZ_SEQUENCE_ERROR;
          if (s->avail_in_expect != s->strm->avail_in) return BZ_SEQUENCE_ERROR;
@@ -447,7 +450,7 @@ int BZ_API(BZ2_bzCompressEnd)  ( bz_stream *strm )
 {
    EState* s;
    if (strm == NULL) return BZ_PARAM_ERROR;
-   s = (EState*)strm->state;
+   s = (EState *)strm->state;
    if (s == NULL) return BZ_PARAM_ERROR;
    if (s->strm != strm) return BZ_PARAM_ERROR;
 
@@ -1392,8 +1395,14 @@ BZFILE * bzopen_or_bzdopen
       }
       mode++;
    }
-   strcat(mode2, writing ? "w" : "r" );
-   strcat(mode2,"b");   /* binary mode */
+
+   strcat(mode2, writing ? "wb" : "rb" );
+
+   /* open fds with O_CLOEXEC _only_ when we are the initiator
+    * aka. bzopen() but not bzdopen() */
+   if(open_mode == 0) {
+      strcat (mode2, writing ? "e" : "e" );
+   }
 
    if (open_mode==0) {
       if (path==NULL || strcmp(path,"")==0) {

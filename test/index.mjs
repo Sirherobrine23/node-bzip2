@@ -26,7 +26,8 @@ const str = CompressStream({
   workFactor: 0
 });
 
-str.on("error", console.error).on("data", (chunk) => console.log(chunk));
-const data = randomBytes(randomInt(8, 256));
-console.log("Writing random, size:", data.byteLength);
+str.on("error", console.error).on("data", (chunk) => console.log("Compressed data:", chunk));
+const Size = randomInt(8, 256);
+const data = randomBytes(Size);
+console.log("Writing random, byteLength: %f, Random: %f", data.byteLength, Size);
 str.end(data);

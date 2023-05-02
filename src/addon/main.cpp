@@ -1,6 +1,6 @@
 #include <napi.h>
 #include <cpp_bzip2/bzlib.hh>
-#include <compress.cpp>
+#include <compressV2.cpp>
 
 Napi::Object Init(Napi::Env env, Napi::Object exports) {
   exports.Set("Compress", Napi::Function::New(env, Compress));

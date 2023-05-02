@@ -1,3 +1,0 @@
-[submodule "src/addon/c_bzip2"]
-	path = src/addon/c_bzip2
-	url = https://github.com/Sirherobrine23/bzip2.git

@@ -8,8 +8,8 @@
    This file is part of bzip2/libbzip2, a program and library for
    lossless, block-sorting data compression.
 
-   bzip2/libbzip2 version 1.0.8 of 13 July 2019
-   Copyright (C) 1996-2019 Julian Seward <jseward@acm.org>
+   bzip2/libbzip2 version 1.1.0 of 6 September 2010
+   Copyright (C) 1996-2010 Julian Seward <jseward@acm.org>
 
    Please read the WARNING, DISCLAIMER and PATENTS sections in the
    README file.
@@ -210,12 +210,12 @@ Int32 BZ2_decompress ( DState* s )
 
       if (s->smallDecompress) {
          s->ll16 = (UInt16 *)BZALLOC( s->blockSize100k * 100000 * sizeof(UInt16) );
-         s->ll4  = (UChar *)BZALLOC(
+         s->ll4  = (UChar*)BZALLOC(
                       ((1 + s->blockSize100k * 100000) >> 1) * sizeof(UChar)
                    );
          if (s->ll16 == NULL || s->ll4 == NULL) RETURN(BZ_MEM_ERROR);
       } else {
-         s->tt  = (UInt32 *)BZALLOC( s->blockSize100k * 100000 * sizeof(Int32) );
+         s->tt  = (UInt32*)BZALLOC( s->blockSize100k * 100000 * sizeof(Int32) );
          if (s->tt == NULL) RETURN(BZ_MEM_ERROR);
       }
 
