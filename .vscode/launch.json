@@ -2,6 +2,13 @@
   "version": "0.2.0",
   "configurations": [
     {
+      "type": "node",
+      "name": "Run node addon test",
+      "preLaunchTask": "npm: rebuild",
+      "program": "${workspaceFolder}/test/index.mjs",
+      "request": "launch"
+    },
+    {
       "type": "lldb",
       "request": "launch",
       "name": "Launch Program",

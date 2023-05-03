@@ -8,8 +8,8 @@
    This file is part of bzip2/libbzip2, a program and library for
    lossless, block-sorting data compression.
 
-   bzip2/libbzip2 version 1.1.0 of 6 September 2010
-   Copyright (C) 1996-2010 Julian Seward <jseward@acm.org>
+   bzip2/libbzip2 version 1.0.8 of 13 July 2019
+   Copyright (C) 1996-2019 Julian Seward <jseward@acm.org>
 
    Please read the WARNING, DISCLAIMER and PATENTS sections in the
    README file.
@@ -21,6 +21,10 @@
 
 #ifndef _BZLIB_H
 #define _BZLIB_H
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #define BZ_RUN               0
 #define BZ_FLUSH             1
@@ -77,9 +81,6 @@ typedef
       /* windows.h define small to char */
 #      undef small
 #   endif
-#   ifndef WINAPI
-#   define WINAPI
-#   endif
 #   ifdef BZ_EXPORT
 #   define BZ_API(func) WINAPI func
 #   define BZ_EXTERN extern
@@ -90,11 +91,9 @@ typedef
 #   endif
 #else
 #   define BZ_API(func) func
+#   define BZ_EXTERN extern
 #endif
 
-#ifndef BZ_EXTERN
-#define BZ_EXTERN extern
-#endif
 
 /*-- Core (low-level) library functions --*/
 
@@ -270,6 +269,10 @@ BZ_EXTERN const char * BZ_API(BZ2_bzerror) (
       BZFILE *b,
       int    *errnum
    );
+#endif
+
+#ifdef __cplusplus
+}
 #endif
 
 #endif

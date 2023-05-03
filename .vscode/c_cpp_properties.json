@@ -20,6 +20,9 @@
             "cStandard": "c17",
             "cppStandard": "c++17",
             "intelliSenseMode": "linux-clang-x64",
+            "compilerArgs": [
+                "-fpermissive"
+            ],
             "defines": [
                 "NAPI_DISABLE_CPP_EXCEPTIONS"
             ],

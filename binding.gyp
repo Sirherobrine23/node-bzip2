@@ -2,10 +2,14 @@
   "targets": [
     {
       "target_name": "bzip2",
-      "dependencies": [
-        "src/addon/cpp_bzip2/bzip.gyp:lib"
-      ],
       "sources": [
+        "src/addon/bzip2/blocksort.c",
+        "src/addon/bzip2/huffman.c",
+        "src/addon/bzip2/crctable.c",
+        "src/addon/bzip2/randtable.c",
+        "src/addon/bzip2/compress.c",
+        "src/addon/bzip2/decompress.c",
+        "src/addon/bzip2/bzlib.c",
         "src/addon/main.cpp"
       ],
       "include_dirs" : [
@@ -14,6 +18,13 @@
       ],
       "defines": [
         "NAPI_DISABLE_CPP_EXCEPTIONS"
+      ],
+      "conditions": [
+        [
+          "OS=='linux'", {
+            "cflags": [ "-fpermissive" ],
+          }
+        ]
       ]
     }
   ],
