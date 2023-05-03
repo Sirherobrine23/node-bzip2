@@ -1,8 +1,6 @@
 import { randomBytes, randomInt } from "crypto";
 import { Transform, finished } from "stream";
 import nodeGyp from "node-gyp-build";
-import SegfaultHandler from "segfault-handler";
-SegfaultHandler.registerHandler("crash.log");
 const addon = nodeGyp(process.cwd());
 
 /**
