@@ -3,7 +3,7 @@
   "version": "0.0.1",
   "description": "",
   "type": "commonjs",
-  "main": "src/index.js",
+  "main": "index.js",
   "author": "Matheus S Queiroga",
   "license": "MIT",
   "homepage": "https://github.com/Sirherobrine23/node-bzip2#readme",

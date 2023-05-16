@@ -11,7 +11,8 @@
             "includePath": [
                 "C:/Users/${env:username}/AppData/Local/node-gyp/Cache/20.0.0/include/node",
                 "${workspaceFolder}/node_modules/node-addon-api",
-                "${workspaceFolder}/src/addon"
+                "${workspaceFolder}/src/bzip2",
+                "${workspaceFolder}/src/**"
             ]
         },
         {
@@ -28,10 +29,11 @@
             ],
 			"includePath": [
 				"${workspaceFolder}/node_modules/node-addon-api/**",
-				"${workspaceFolder}/node_modules/**",
 				"${workspaceFolder}/**",
 				"/usr/include/node",
-                "${workspaceFolder}/src/addon"
+				"${workspaceFolder}/node_modules/**",
+                "${workspaceFolder}/src/bzip2",
+                "${workspaceFolder}/src"
 			]
 		}
     ],
